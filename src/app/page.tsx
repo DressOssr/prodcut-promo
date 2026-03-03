@@ -1,65 +1,155 @@
-import Image from "next/image";
+import Link from 'next/link'
+import Image from 'next/image'
+import type { Product } from '@/types/product'
+import Pagination from '@/components/Pagination'
 
-export default function Home() {
+interface ProductsResponse {
+  products: Product[]
+  total: number
+  skip: number
+  limit: number
+}
+
+const ITEMS_PER_PAGE = 12
+
+interface PageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}
+
+async function getProducts(page: number): Promise<ProductsResponse> {
+  const skip = (page - 1) * ITEMS_PER_PAGE
+  const url = `https://dummyjson.com/products?limit=${ITEMS_PER_PAGE}&skip=${skip}&select=id,title,price,thumbnail,discountPercentage,rating,stock`
+
+  const response = await fetch(url, {
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch products')
+  }
+
+  return response.json()
+}
+
+interface PageContent {
+  products: Product[]
+  total: number
+  totalPages: number
+  currentPage: number
+}
+
+async function loadPageData(page: number): Promise<PageContent | null> {
+  try {
+    const data = await getProducts(page)
+    const total = data.total
+    const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE))
+    const currentPage = Math.min(page, totalPages)
+
+    return {
+      products: data.products,
+      total,
+      totalPages,
+      currentPage,
+    }
+  } catch {
+    return null
+  }
+}
+
+const Home = async ({ searchParams }: Readonly<PageProps>) => {
+  const params = await searchParams
+  const pageParam = params.page
+  const pageValue = typeof pageParam === 'string' ? Number.parseInt(pageParam, 10) : 1
+  const page = Number.isFinite(pageValue) && pageValue > 0 ? pageValue : 1
+
+  const pageContent = await loadPageData(page)
+
+  if (!pageContent) {
+    return (
+      <div className="min-h-screen bg-gray-50 px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-4xl">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-6">
+            <h1 className="mb-2 text-2xl font-bold text-red-900">Error</h1>
+            <p className="text-red-700">An error occurred while fetching products</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const { products, total, totalPages, currentPage } = pageContent
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="min-h-screen bg-gray-50 px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-gray-900">Products</h1>
+          <p className="mt-2 text-gray-600">
+            Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{' '}
+            {Math.min(currentPage * ITEMS_PER_PAGE, total)} of {total} products
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {products.map((product) => (
+            <Link key={product.id} href={`/product/${product.id}`}>
+              <div className="h-full cursor-pointer overflow-hidden rounded-lg border border-gray-200 bg-white shadow-md transition-shadow hover:shadow-lg">
+                <div className="relative flex h-48 w-full items-center justify-center bg-gray-100">
+                  <Image
+                    src={product.thumbnail}
+                    alt={product.title}
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    className="object-cover"
+                  />
+                </div>
+
+                <div className="p-4">
+                  <h3 className="mb-2 line-clamp-2 text-sm font-semibold text-gray-900">
+                    {product.title}
+                  </h3>
+
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold text-gray-900">
+                        ${(product.price * (1 - product.discountPercentage / 100)).toFixed(2)}
+                      </span>
+                      {product.discountPercentage > 0 && (
+                        <>
+                          <span className="text-sm text-gray-500 line-through">
+                            ${product.price.toFixed(2)}
+                          </span>
+                          <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
+                            -{product.discountPercentage}%
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-1">
+                      <span className="font-bold text-yellow-500">{product.rating}</span>
+                      <span className="text-gray-500">★</span>
+                    </div>
+                    <span
+                      className={`font-semibold ${
+                        product.stock > 0 ? 'text-green-600' : 'text-red-600'
+                      }`}
+                    >
+                      {product.stock > 0 ? `${product.stock}` : 'OOS'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </Link>
+          ))}
         </div>
-      </main>
+
+        <Pagination currentPage={currentPage} totalPages={totalPages} />
+      </div>
     </div>
-  );
+  )
 }
+
+export default Home
